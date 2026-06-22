@@ -1,0 +1,11 @@
+fastapi
+uvicorn 
+pandas 
+scikit-learn 
+tensorflow 
+joblib 
+requests 
+openpyxl 
+pillow
+xgboost
+python-dotenv
