@@ -1,9 +1,8 @@
-import tensorflow as tf
+import onnxruntime as rt
 import numpy as np
-from tensorflow.keras.preprocessing import image
+from PIL import Image
 
-
-model = tf.keras.models.load_model("./models/soil_model.onnx")
+session = rt.InferenceSession("./models/soil_model.onnx")
 
 class_names = {
     0: "Alluvial_Soil",
@@ -15,19 +14,11 @@ class_names = {
     6: "Yellow_Soil"
 }
 
-
 def predict_soil(img_path):
-
-    img = image.load_img(img_path, target_size=(256, 256))
-
-    img_array = image.img_to_array(img)
-
+    img = Image.open(img_path).resize((256, 256))
+    img_array = np.array(img).astype(np.float32) / 255.0
     img_array = np.expand_dims(img_array, axis=0)
-
-    img_array = img_array / 255.0
-
-    prediction = model.predict(img_array)
-
-    predicted_class = np.argmax(prediction)
-
+    input_name = session.get_inputs()[0].name
+    prediction = session.run(None, {input_name: img_array})
+    predicted_class = np.argmax(prediction[0])
     return class_names[predicted_class]
