@@ -1,8 +1,9 @@
-from fastapi import FastAPI, UploadFile, File,Form
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 import shutil
 import os
 import joblib
 import numpy as np
+import traceback
 from fastapi.middleware.cors import CORSMiddleware
 from utils.soil_predict import predict_soil
 from utils.crop_predict import predict_crop
@@ -11,29 +12,22 @@ from services.weather_service import get_weather
 
 app = FastAPI()
 
-UPLOAD_FOLDER = "uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-
-# =========================
-# LOAD SCALER
-# =========================
-crop_scaler = joblib.load("models/crop_scaler.pkl")
-
-
-@app.get("/")
-def home():
-    return {"message": "Smart Agriculture API Running"}
-
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # React frontend
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+crop_scaler = joblib.load("models/crop_scaler.pkl")
+
+@app.get("/")
+def home():
+    return {"message": "Smart Agriculture API Running"}
 
 @app.post("/predict")
 async def predict(
@@ -44,39 +38,33 @@ async def predict(
     ph: float = Form(...),
     file: UploadFile = File(...)
 ):
+    try:
+        file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+        with open(file_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        print("✅ File saved:", file_path)
 
-    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+        soil_type = predict_soil(file_path)
+        print("✅ Soil type:", soil_type)
 
-    with open(file_path, "wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
+        temperature, humidity, rainfall = get_weather(city)
+        print("✅ Weather:", temperature, humidity, rainfall)
 
-    soil_type = predict_soil(file_path)
+        recommended_crop = predict_crop(N, P, K, temperature, humidity, ph, rainfall)
+        print("✅ Crop:", recommended_crop)
 
-    temperature, humidity, rainfall = get_weather(city)
+        fertilizer = predict_fertilizer(temperature, humidity, recommended_crop, N, K, P)
+        print("✅ Fertilizer:", fertilizer)
 
-    # ✅ CLEAN CALL (NO SCALING HERE)
-    recommended_crop = predict_crop(
-        N, P, K,
-        temperature,
-        humidity,
-        ph,
-        rainfall
-    )
+        return {
+            "soil_type": soil_type,
+            "temperature": temperature,
+            "humidity": humidity,
+            "rainfall": rainfall,
+            "recommended_crop": recommended_crop,
+            "fertilizer": fertilizer
+        }
 
-    fertilizer = predict_fertilizer(
-        temperature,
-        humidity,
-        recommended_crop,
-        N,
-        K,
-        P
-    )
-
-    return {
-        "soil_type": soil_type,
-        "temperature": temperature,
-        "humidity": humidity,
-        "rainfall": rainfall,
-        "recommended_crop": recommended_crop,
-        "fertilizer": fertilizer
-    }
+    except Exception as e:
+        print("❌ ERROR:", traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
