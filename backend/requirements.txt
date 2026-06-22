@@ -9,3 +9,4 @@ openpyxl
 pillow
 xgboost
 python-dotenv
+python-multipart
