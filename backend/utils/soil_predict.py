@@ -3,7 +3,7 @@ import numpy as np
 from tensorflow.keras.preprocessing import image
 
 
-model = tf.keras.models.load_model("./models/soil_model.keras")
+model = tf.keras.models.load_model("./models/soil_model.onnx")
 
 class_names = {
     0: "Alluvial_Soil",
